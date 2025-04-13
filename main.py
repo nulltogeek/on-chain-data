@@ -61,7 +61,7 @@ def process_block(block_num):
     return local_txs
 
 
-def scan_blocks(start_block, end_block, max_workers=3):
+def scan_blocks(start_block, end_block, max_workers=4):
     block_range = list(range(start_block, end_block + 1))
     all_transactions = []
 
@@ -80,33 +80,49 @@ def scan_blocks(start_block, end_block, max_workers=3):
     return all_transactions
 
 
-def save_to_file(transactions, hours_ago_start, hours_ago_end):
+def save_to_file(transactions, start_block, end_block):
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    filename = f"txs_{hours_ago_start}to{hours_ago_end}_hours.json"
+
+    # Get the datetime range from the first and last transactions
+    if transactions:
+        start_date = transactions[0]["datetime"].split()[0]  # Extract date part
+        end_date = transactions[-1]["datetime"].split()[0]
+        filename = (
+            f"txs_{start_date}_to_{end_date}_block_{start_block}_to_{end_block}.json"
+        )
+    else:
+        filename = f"txs_block_{start_block}_to_{end_block}.json"
+
     path = os.path.join(OUTPUT_DIR, filename)
     with open(path, "w") as f:
         json.dump(transactions, f, indent=2)
     return path
 
 
-# === Main ===
 def main():
     try:
-        hours_ago_start = int(input("Enter start hours (e.g., 24): "))
-        hours_ago_end = int(input("Enter end hours (e.g., 0): "))
-        if hours_ago_start <= hours_ago_end:
-            raise ValueError("Start hours must be greater than end hours")
+        start_input = input("Enter start datetime (e.g., 2024-04-10 00:00:00): ")
+        end_input = input("Enter end datetime (e.g., 2024-04-12 23:59:59): ")
 
-        start_ts = int(
-            (datetime.utcnow() - timedelta(hours=hours_ago_start)).timestamp()
-        )
-        end_ts = int((datetime.utcnow() - timedelta(hours=hours_ago_end)).timestamp())
+        # Parse datetimes
+        start_dt = datetime.strptime(start_input, "%Y-%m-%d %H:%M:%S")
+        end_dt = datetime.strptime(end_input, "%Y-%m-%d %H:%M:%S")
+
+        if start_dt >= end_dt:
+            raise ValueError("Start datetime must be earlier than end datetime.")
+
+        # Convert to timestamps
+        start_ts = int(start_dt.timestamp())
+        end_ts = int(end_dt.timestamp())
+
+        # Find the blocks
         start_block = get_block_by_timestamp(start_ts)
         end_block = get_block_by_timestamp(end_ts)
 
         print(
             f"Scanning from block {start_block} to {end_block} using multi-threading..."
         )
+
         transactions = scan_blocks(start_block, end_block)
 
         # Print transaction hashes
@@ -114,7 +130,7 @@ def main():
         for tx in transactions:
             print(f" - {tx['tx_hash']}")
 
-        output_file = save_to_file(transactions, hours_ago_start, hours_ago_end)
+        output_file = save_to_file(transactions, start_block, end_block)
         print(f"\n✅ {len(transactions)} transactions found.")
         print(f"📁 Saved to: {output_file}")
 

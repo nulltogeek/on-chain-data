@@ -41,18 +41,19 @@ def process_block(block_num):
     try:
         block = web3.eth.get_block(block_num, full_transactions=True)
         for tx in block.transactions:
-            # Only process if it has input data
-            if tx['input'] and tx['input'] != HexBytes('0x'):
-                amount = decode_erc20_transfer_amount(tx['input'])
-                if amount is not None:  # Only if it's an ERC20 transfer
+            if tx["input"] and tx["input"] != HexBytes("0x"):
+                amount, recipient = decode_erc20_transfer_amount(tx["input"])
+                if amount is not None:
                     tx_data = {
-                        'tx_hash': tx['hash'].hex(),
-                        'from': tx['from'],
-                        'to': tx['to'],
-                        'amount': amount,
-                        'datetime': datetime.utcfromtimestamp(block.timestamp).strftime('%Y-%m-%d %H:%M:%S UTC'),
-                        'block_number': block_num,
-                        'input_data': tx['input'].hex()
+                        "tx_hash": tx["hash"].hex(),
+                        "from": tx["from"],
+                        "to": recipient,  # The actual recipient from input data
+                        "contract_address": tx["to"],  # The token contract address
+                        "amount": amount,
+                        "datetime": datetime.utcfromtimestamp(block.timestamp).strftime(
+                            "%Y-%m-%d %H:%M:%S UTC"
+                        ),
+                        "block_number": block_num,
                     }
                     local_txs.append(tx_data)
     except Exception as e:
@@ -91,8 +92,8 @@ def save_to_file(transactions, hours_ago_start, hours_ago_end):
 # === Main ===
 def main():
     try:
-        hours_ago_start = 23
-        hours_ago_end = 21
+        hours_ago_start = int(input("Enter start hours (e.g., 24): "))
+        hours_ago_end = int(input("Enter end hours (e.g., 0): "))
         if hours_ago_start <= hours_ago_end:
             raise ValueError("Start hours must be greater than end hours")
 
